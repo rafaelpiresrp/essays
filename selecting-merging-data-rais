@@ -1,0 +1,78 @@
+#Flexibilidade Alocativa do mercado de Trabalho
+#EXTRA??O PRIM?RIA DOS DADOS
+setwd("D:/Pessoal/RPires_LMongold/rafaelpires")
+
+#Pacotes
+library(data.table)
+library(tidyverse)
+library(readxl)
+library(dplyr)
+
+#arquivos
+arquivos <- list.files("D:/Bases/MTE/Vinc/arquivos-csv/", pattern = "2014|2017|2018|2021")
+arquivos <- arquivos[order(as.numeric(str_extract(arquivos, "[[:digit:]]+")))]
+ano <- unique(str_extract(arquivos, "[[:digit:]]+"))
+caminhos <- paste0("D:/Bases/MTE/Vinc/arquivos-csv/", arquivos)
+
+# Carregando o arquivo de rgi e cnae
+mun_micror <- setDT(read_xlsx("D:/Pessoal/RPires_LMongold/rafaelpires/flexibilidadealocativa/dados/codmunrgi.xlsx"))
+mun_micror <- mun_micror[ , c("municipio", "codrgi")]
+cnae20 <- read_xlsx("D:/Pessoal/RPires_LMongold/rafaelpires/flexibilidadealocativa/dados/cnae20dad.xlsx") 
+cnae20 %>% rename("clascnae20" = "cnae20")
+cnae20$clascnae20 <- as.integer(cnae20$clascnae20)
+cnae20$grupo <- as.integer(cnae20$grupo)
+
+#loop
+
+for(i in seq_along(ano)){
+  
+  caminhos_ano <- caminhos[str_detect(caminhos, pattern = ano[i])]
+  
+  lista_ano <- list()
+  
+  for (j in seq_along(caminhos_ano)) {
+    
+    print(caminhos_ano[j])
+    
+    dados <- fread(caminhos_ano[j],
+                   select=c("municipio","ocup2002","empem3112", "naturjur","clascnae20"))%>%
+      .[naturjur>2020 & empem3112==1]%>%
+      .[, municipio := as.character(municipio)]%>%
+      .[, clascnae20 := as.integer(clascnae20)]%>%
+      .[, ocup2002 := str_extract(ocup2002, pattern = "[[:digit:]]+")] %>%
+      .[, cbo2002 := as.numeric(ocup2002)] %>%
+      merge(mun_micror, by = "municipio")%>%
+      merge(cnae20, by="clascnae20")
+    
+    
+    # Criando a vari?vel do ano da base
+    
+    dados<-setDT(dados)
+    dados[, ano := ano[i]]
+    
+    dados_final<-dados%>%
+      select("codrgi", "clascnae20", "empem3112", "grupo", "cbo2002")
+    
+    
+    
+    lista_ano[[j]] <- dados_final
+    
+    
+  }
+  
+  dados_ano <- rbindlist(lista_ano)
+  
+  rm(lista_ano)
+  gc()
+  
+  
+  fwrite(dados_ano, paste0("D:/Pessoal/RPires_LMongold/rafaelpires/flexibilidadealocativa/dados/dadflexaloc_com_cbo", ano[i], ".csv"))
+  
+  
+  rm(dados_ano)
+  gc()
+  
+} 
+
+
+
